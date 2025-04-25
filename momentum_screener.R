@@ -3,7 +3,7 @@ library(tidyverse)
 library(tidyquant)
 library(httr)
 library(rvest)
-#library(lubridate)
+
 
 #---------- CONFIG BREAKOUT CRITETIA ----------#
 
