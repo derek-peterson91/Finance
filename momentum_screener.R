@@ -3,7 +3,7 @@ library(tidyverse)
 library(tidyquant)
 library(httr)
 library(rvest)
-library(lubridate)
+#library(lubridate)
 
 #---------- CONFIG BREAKOUT CRITETIA ----------#
 
@@ -108,10 +108,10 @@ tidy_stocks <- universe %>%
 # Add 50 day moving average and 52-high columns
 close_prices <-
   tidy_stocks %>%
-  select(symbol, date, volume, adjusted) %>%
+  select(symbol, date, volume, high, adjusted) %>%
   group_by(symbol) %>%
   mutate(avg_vol_50 = rollapply(volume, 50, mean, align = 'right', fill = NA)) %>%
-  mutate(rolling_high = cummax(adjusted))
+  mutate(rolling_high = cummax(high))
 
 # Extract dates for joining later
 dates <- close_prices %>%
@@ -166,7 +166,7 @@ breakout_final <-
       breakout
     )
   ) %>%
-  filter(breakout == 'high-breaker' | breakout == 'near-high') %>%
+  filter(breakout == 'high-breaker' | breakout == 'near-breakout') %>%
   left_join(dates) %>%
   select(
     `Symbol` = symbol,
