@@ -10,51 +10,127 @@ library(tidyverse)
 library(readxl)
 library(tidyquant)
 library(dplyr)
+library(ggcorrplot)
+library(moments)
 
 
 
 # === UI ===
 ui <- dashboardPage(
-  dashboardHeader(title = 'Portfolio Construction'),
+  dashboardHeader(title = 'Portfolio Visualizer'),
   dashboardSidebar(
-    fileInput('file', 'Upload Ticker List (.csv or .xlsx)', accept = c('.csv', '.xlsx', '.xls')),
+    fileInput(
+      'file',
+      'Upload Ticker List (.csv or .xlsx)',
+      accept = c('.csv', '.xlsx', '.xls')
+    ),
     dateRangeInput(
       inputId = 'daterange',
       label = 'Date Range',
       start = Sys.Date() - 365,
       end = Sys.Date()
     ),
-    downloadButton('downloadData', 'Download Price Data')
-  ),
-  dashboardBody(
-    fluidRow(
-      box(
-        width = 12,
-        title = "Return Statistics",
-        solidHeader = TRUE,
-        collapsible = TRUE,
-        dataTableOutput("return_stats")
-      ),
-      box(
-        title = "Return Distribution",
-        width = 12,
-        plotOutput('return_histograms'),
-        collapsible = TRUE
-      ),
-      box(
-        title = 'Efficient Frontier of 1000 Random Portfolios',
-        width = 12,
-        plotOutput('efficient_frontier'),
-        collapsible = TRUE
-      ),
-      box(
-        title = "Best Portfolios",
-        width = 12,
-        dataTableOutput('best_portfolios'),
-        collapsible = TRUE
-      )
+    div(
+      style = 'text-align: center; padding-top: 55px;',
+      downloadButton('downloadTemplate', 'Download Template', class = 'btn-custom')
+    ),
+    div(
+      style = 'text-align: center; padding-top: 55px;',
+      downloadButton('downloadPortfolios', 'Download Portfolios', class = 'btn-custom')
     )
-  )
+  ),
+  dashboardBody(tags$head(tags$style(
+    HTML(
+      "
+
+      /* Apply width only when sidebar is expanded */
+    body:not(.sidebar-collapse) .main-sidebar {
+      width: 280px !important;
+    }
+    body:not(.sidebar-collapse) .main-header .logo {
+      width: 280px !important;
+    }
+    body:not(.sidebar-collapse) .main-header .navbar {
+      margin-left: 280px !important;
+    }
+    body:not(.sidebar-collapse) .content-wrapper,
+    body:not(.sidebar-collapse) .main-footer {
+      margin-left: 280px !important;
+    }
+    /* Download button styling */
+    .btn-custom {
+      color: #ffffff !important;
+      background-color: #007BFF !important;
+      border-color: #007BFF !important;
+      font-weight: bold !important;
+    }
+    .btn-custom:hover {
+      background-color: #0056b3 !important;
+      border-color: #004a99 !important;
+    }
+    /* Custom primary blue: #1E1A4D */
+
+        /* Top navbar */
+        .skin-blue .main-header .navbar {
+          background-color: #3b0f70;
+        }
+
+        /* Logo background */
+        .skin-blue .main-header .logo {
+          background-color: #3b0f70;
+        }
+
+        /* Sidebar background */
+        .skin-blue .main-sidebar {
+          background-color: #3b0f70;
+        }
+
+        /* Sidebar hover */
+        .skin-blue .main-sidebar .sidebar .sidebar-menu li:hover a {
+          background-color: #3b0f70;
+        }
+
+        /* Sidebar active item */
+        .skin-blue .main-sidebar .sidebar .sidebar-menu .active a {
+          background-color: #1C3272;
+        }
+
+
+                      "
+    )
+  )), fluidRow(
+    box(
+      width = 12,
+      title = "Return Statistics",
+      solidHeader = TRUE,
+      collapsible = TRUE,
+      dataTableOutput("return_stats")
+    ),
+    box(
+      title = "Return Distribution",
+      width = 12,
+      plotOutput('return_histograms', height = '600px'),
+      collapsible = TRUE
+    ),
+    box(
+      title = 'Efficient Frontier of 1000 Random Portfolios',
+      width = 12,
+      plotOutput('efficient_frontier', height = '600px'),
+      collapsible = TRUE
+    ),
+    box(
+      title = "Best Portfolios",
+      width = 12,
+      dataTableOutput('best_portfolios'),
+      collapsible = TRUE
+    ),
+    box(
+      title = 'Portfolio Correlation',
+      width = 6,
+      plotOutput('correlation'),
+      collapsible = TRUE
+    )
+  ))
 )
 
 # === SERVER ===
@@ -211,6 +287,13 @@ server <- function(input, output, session) {
   })
   
   
+  # calculate correlations across assets
+  cor_matrix <- reactive({ 
+    returns() %>%
+    select(-date) %>%
+    filter(if_all(everything(), ~!is.na(.))) %>%
+    cor()
+  })
   
   # 3. Show table
   output$return_stats <- renderDataTable({
@@ -244,7 +327,7 @@ server <- function(input, output, session) {
       ggplot(aes(x = Return)) +
       geom_histogram(
         bins = 50,
-        fill = '#5d2f8d',
+        fill = '#3b0f70',
         color = 'white',
         alpha = 0.80
       ) +
@@ -252,7 +335,10 @@ server <- function(input, output, session) {
       scale_x_continuous(labels = scales::label_percent(accuracy = 0.1)) +
       theme_minimal() +
       labs(x = 'Daily Return', y = 'Frequency') +
-      theme(strip.text = element_text(face = 'bold'))
+      theme(strip.text = element_text(face = 'bold', size = 12),
+            axis.title = element_text(size = 14),
+            axis.text = element_text(size = 14)
+            )
   })
   
   output$efficient_frontier <- renderPlot({
@@ -261,7 +347,7 @@ server <- function(input, output, session) {
     mpt_stats() %>%
       ggplot(aes(x = sd, y = expected_return, color = optimal_port)) +
       geom_point(size = 5, alpha = 0.60) +
-      scale_color_manual(values = c("highlight" = 'red', "normal" = '#0295b6')) +
+      scale_color_manual(values = c("highlight" = '#8c2981', "normal" = '#fe9f6d')) +
       scale_x_continuous(labels = label_percent(accuracy = 0.1)) +
       scale_y_continuous(labels = label_percent(accuracy = 0.1)) +
       theme_bw() +
@@ -275,7 +361,8 @@ server <- function(input, output, session) {
         panel.border = element_blank(),
         axis.line = element_line(color = 'gray75'),
         plot.title = element_text(hjust = 0.5, color = 'gray35'),
-        axis.title = element_text(color = 'gray35'),
+        axis.title = element_text(color = 'gray35', size = 14),
+        axis.text = element_text(size = 14),
         legend.position = "none"
       )
   })
@@ -295,12 +382,26 @@ server <- function(input, output, session) {
       options = list(
         pageLength = 10,
         autoWidth = TRUE,
+        scrollX = ifelse(num_tickers() > 8, TRUE, FALSE),
         order = list(list(n - 1, 'desc'))
       ),
       rownames = FALSE
     ) %>%
       formatPercentage(columns = colnames(df)[1:(n - 1)], digits = 2) %>%
       formatRound(columns = 'Sharpe Ratio', digits = 2)
+  })
+  
+  output$correlation <- renderPlot({
+    req(cor_matrix())
+    
+    ggcorrplot(cor_matrix(),
+               method = 'circle', 
+               type = 'lower', 
+               lab = TRUE,
+               lab_size = 6, 
+               colors = c("#3b0f70", "white", "#de4968"),
+               title = '',
+               ggtheme = theme_minimal())
   })
   
   # Download template
@@ -314,6 +415,16 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       write_csv(template_data, file)
+    }
+  )
+  
+  # Download random weight portfolios
+  output$downloadPortfolios <- downloadHandler(
+    filename = function() {
+      "Portfolios.csv"
+    },
+    content = function(file) {
+      write_csv(mpt_stats(), file)
     }
   )
 }
