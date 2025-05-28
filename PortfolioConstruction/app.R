@@ -1,5 +1,10 @@
 
 
+
+#-------------------#
+##### Libraries #####
+#-------------------#
+
 library(shiny)
 library(shinydashboard)
 library(tools)
@@ -15,31 +20,34 @@ library(moments)
 
 
 
-# === UI ===
+#-------------------------#
+##### Define UI Logic #####
+#-------------------------#
+
 ui <- dashboardPage(
   dashboardHeader(title = 'Portfolio Visualizer'),
   dashboardSidebar(
     fileInput(
       'file',
       'Upload Ticker List (.csv or .xlsx)',
-      accept = c('.csv', '.xlsx', '.xls')
+      accept = c('.csv', '.xlsx', '.xls') # file input for csv or excel file of tickers
     ),
-    dateRangeInput(
+    dateRangeInput( # input date range for analysis
       inputId = 'daterange',
       label = 'Date Range',
       start = Sys.Date() - 365,
       end = Sys.Date()
     ),
     div(
-      style = 'text-align: center; padding-top: 55px;',
-      downloadButton('downloadTemplate', 'Download Template', class = 'btn-custom')
+      style = 'text-align: center; padding-top: 55px;', # download button for template
+      downloadButton('downloadTemplate', 'Download Template', class = 'btn-custom') 
     ),
     div(
-      style = 'text-align: center; padding-top: 55px;',
+      style = 'text-align: center; padding-top: 55px;', # download button for portfolio data
       downloadButton('downloadPortfolios', 'Download Portfolios', class = 'btn-custom')
     )
   ),
-  dashboardBody(tags$head(tags$style(
+  dashboardBody(tags$head(tags$style( # define UI colors and behaviors
     HTML(
       "
 
@@ -104,57 +112,63 @@ ui <- dashboardPage(
       title = "Return Statistics",
       solidHeader = TRUE,
       collapsible = TRUE,
-      dataTableOutput("return_stats")
+      dataTableOutput("return_stats") # box for return stats
     ),
     box(
       title = "Return Distribution",
       width = 12,
       plotOutput('return_histograms', height = '600px'),
-      collapsible = TRUE
+      collapsible = TRUE # faceted histogram output
     ),
     box(
       title = 'Efficient Frontier of 1000 Random Portfolios',
       width = 12,
       plotOutput('efficient_frontier', height = '600px'),
-      collapsible = TRUE
+      collapsible = TRUE # efficient frontier output
     ),
     box(
       title = "Best Portfolios",
       width = 12,
       dataTableOutput('best_portfolios'),
-      collapsible = TRUE
+      collapsible = TRUE # list of best portfolios output
     ),
     box(
       title = 'Portfolio Correlation',
       width = 6,
       plotOutput('correlation'),
-      collapsible = TRUE
+      collapsible = TRUE # correlation output
     )
   ))
 )
 
-# === SERVER ===
+#-------------------------#
+##### Define Server Logic #####
+#-------------------------#
 server <- function(input, output, session) {
   
-  # 1. Read uploaded ticker file
+  # Read uploaded ticker file
   tickers_df <- reactive({
     req(input$file)
-    ext <- file_ext(input$file$name)
-    df <- switch(
+    ext <- file_ext(input$file$name) # view extension
+    df <- switch( # choose read function depending on extension
       ext,
       csv = read_csv(input$file$datapath, show_col_types = FALSE),
       xlsx = read_excel(input$file$datapath),
       xls = read_excel(input$file$datapath),
       stop("Unsupported file format")
     )
-    validate(
+    validate( # check for required column name
       need("Ticker" %in% colnames(df), "'Ticker' column is required.")
     )
     df
   })
   
-  # 2. Download prices
   
+  #---------------------------------------------------#
+  ################## Download the data ################
+  #---------------------------------------------------#
+  
+  # initially download 10yrs of data
   base_returns <- reactive({
     req(tickers_df())
     tickers <- tickers_df()$Ticker
@@ -164,24 +178,29 @@ server <- function(input, output, session) {
            get = "stock.prices")
   })
   
-  
+  #---------------------------------------------------#
+  ################## Returns dataframe ################
+  #---------------------------------------------------#
   returns <- reactive({
     req(base_returns())
     
     base_returns() %>%
-      filter(date >= input$daterange[1] & date <= input$daterange[2]) %>%
+      filter(date >= input$daterange[1] & date <= input$daterange[2]) %>% # filter based on date range inputs
       select(symbol, date, adjusted) %>%
       group_by(symbol) %>%
       tq_transmute(
         select = adjusted,
         mutate_fun = periodReturn,
         period = "daily",
-        col_rename = "daily_return"
+        col_rename = "daily_return" # calculate returns from daily prices
       ) %>%
-      pivot_wider(names_from = symbol, values_from = daily_return) 
+      pivot_wider(names_from = symbol, values_from = daily_return)  # put into wide dataframe
     
   })
   
+  #----------------------------------------------------------#
+  ################### Return stats dataframe #################
+  #---------------------------------------------------------#
   return_stats <- reactive({
     req(tickers_df())
     returns() %>%
@@ -189,10 +208,10 @@ server <- function(input, output, session) {
       summarise(across(
         everything(),
         list(
-          mean = ~ mean(.x, na.rm = TRUE),
-          sd = ~ sd(.x, na.rm = TRUE),
-          skewness = ~ skewness(.x, na.rm = TRUE),
-          kurtosis = ~ kurtosis(.x, na.rm = TRUE)
+          mean = ~ mean(.x, na.rm = TRUE), # average return
+          sd = ~ sd(.x, na.rm = TRUE), # standard deviation of returns
+          skewness = ~ skewness(.x, na.rm = TRUE), # skewness of returns
+          kurtosis = ~ kurtosis(.x, na.rm = TRUE) # kurtosis of returns
         )
       )) %>%
       rename_with( ~ str_replace_all(.x, '.ret', ''), everything()) %>%
@@ -201,17 +220,19 @@ server <- function(input, output, session) {
         names_to = c('Ticker', 'stat'),
         names_sep = "_"
         
-      ) %>%
+      ) %>% 
       pivot_wider(names_from = stat, values_from = value) %>%
       # also calculate annualized versions of mean and sd
       mutate(annualized_mean = ((1 + mean) ^ 252) - 1,
-             annualized_sd = sd * sqrt(252))
+             annualized_sd = sd * sqrt(252)) # annualize return and sd
       
   })
   
-  ##### Create Efficient Frontier #####
+  #---------------------------------------#
+  ##### Efficient Frontier Dataframes #####
+  #--------------------------------------#
   
-  
+  # calculate covariance of the tickers
   cov_matrix <- reactive({
     req(returns())
     returns() %>%
@@ -221,6 +242,7 @@ server <- function(input, output, session) {
     cov()
   })
   
+  # extract the number of tickers
   num_tickers <- reactive({
     req(return_stats())
     nrow(return_stats())
@@ -240,8 +262,6 @@ server <- function(input, output, session) {
     names(df) <- return_stats()$Ticker
     df
   })
-  
- 
   
   # function to calculate variance for each random portfolio
   portfolio_variance_fn <- function(w, cov_matrix) {
@@ -283,11 +303,13 @@ server <- function(input, output, session) {
         sharpe = expected_return / sd,
         optimal_port = ifelse(sharpe == max(sharpe), "highlight", "normal")
       ) %>%
-      arrange(-desc(sharpe))
+      arrange(-desc(sharpe)) # sort by sharpe ratio
   })
   
   
-  # calculate correlations across assets
+  #---------------------------------------#
+  ########## Correlation Dataframe ########
+  #--------------------------------------#
   cor_matrix <- reactive({ 
     returns() %>%
     select(-date) %>%
@@ -295,7 +317,13 @@ server <- function(input, output, session) {
     cor()
   })
   
-  # 3. Show table
+  #-------------------------------#
+  ############ Outputs ############
+  #-------------------------------#
+  
+  #------------------------------------------------#
+  ############ Return Stats Table Ouput ############
+  #------------------------------------------------#
   output$return_stats <- renderDataTable({
     req(return_stats())
     
@@ -306,17 +334,20 @@ server <- function(input, output, session) {
       colnames = c(
         "ETF",
         "Average Daily Return",                 # mean
-        "Standard Deviation of Daily Returns", # sd
+        "Standard Deviation of Daily Returns",  # sd
         "Skewness",
         "Kurtosis",
         "Annualized Return",
-        "Annualized Risk (SD)"
+        "Annualized Risk (SD)" # rename the columns for display without altering actual dataframe
       )
     ) %>%
-      formatPercentage(c("mean", "sd", "annualized_mean", "annualized_sd"), digits = 2) %>%    # format mean and sd as %
+      formatPercentage(c("mean", "sd", "annualized_mean", "annualized_sd"), digits = 2) %>% # format mean and sd as %
       formatRound(c("skewness", "kurtosis"), digits = 2)   # round skewness & kurtosis to 2 decimals
   })
   
+  #------------------------------------------#
+  ############# Histogram Output #############
+  #------------------------------------------#
   output$return_histograms <- renderPlot({
     req(returns())
     
@@ -341,6 +372,9 @@ server <- function(input, output, session) {
             )
   })
   
+  #---------------------------------------------------#
+  ############# Efficient Frontier Output #############
+  #---------------------------------------------------#
   output$efficient_frontier <- renderPlot({
     req(mpt_stats(), return_stats())
     
@@ -367,9 +401,13 @@ server <- function(input, output, session) {
       )
   })
   
+  #---------------------------------------------------#
+  ############### Best Portfolios Output ##############
+  #---------------------------------------------------#
   output$best_portfolios <- renderDataTable({
     req(mpt_stats())
     
+    # select the wanted columns for display
     df <- mpt_stats() %>%
       select(-c(optimal_port, variance))
     
@@ -382,8 +420,8 @@ server <- function(input, output, session) {
       options = list(
         pageLength = 10,
         autoWidth = TRUE,
-        scrollX = ifelse(num_tickers() > 8, TRUE, FALSE),
-        order = list(list(n - 1, 'desc'))
+        scrollX = ifelse(num_tickers() > 8, TRUE, FALSE), # enable a scroll bar for more than 8 tickers
+        order = list(list(n - 1, 'desc')) # sort by sharpe ratio
       ),
       rownames = FALSE
     ) %>%
@@ -391,6 +429,9 @@ server <- function(input, output, session) {
       formatRound(columns = 'Sharpe Ratio', digits = 2)
   })
   
+  #---------------------------------------------------#
+  ############## Correlation Plot Output ##############
+  #---------------------------------------------------#
   output$correlation <- renderPlot({
     req(cor_matrix())
     
@@ -404,7 +445,11 @@ server <- function(input, output, session) {
                ggtheme = theme_minimal())
   })
   
-  # Download template
+  #-------------------------------#
+  ########### Downloads ###########
+  #-------------------------------#
+  
+  # create a template for the user to download and edit
   template_data <- data.frame(
     Ticker = c("VOO", "VEA", "IEMG", "TLT", "BND", "VNQ")
   )
@@ -429,5 +474,8 @@ server <- function(input, output, session) {
   )
 }
 
-# === RUN APP ===
+#-------------------------------#
+############# RUN APP ###########
+#-------------------------------#
 shinyApp(ui = ui, server = server)
+
