@@ -108,11 +108,17 @@ ui <- dashboardPage(
     )
   )), fluidRow(
     box(
-      width = 12,
+      width = 6,
       title = "Return Statistics",
       solidHeader = TRUE,
       collapsible = TRUE,
       dataTableOutput("return_stats") # box for return stats
+    ),
+    box(
+      title = 'Portfolio Correlation',
+      width = 6,
+      plotOutput('correlation'),
+      collapsible = TRUE # correlation output
     ),
     box(
       title = "Return Distribution",
@@ -131,13 +137,8 @@ ui <- dashboardPage(
       width = 12,
       dataTableOutput('best_portfolios'),
       collapsible = TRUE # list of best portfolios output
-    ),
-    box(
-      title = 'Portfolio Correlation',
-      width = 6,
-      plotOutput('correlation'),
-      collapsible = TRUE # correlation output
     )
+    
   ))
 )
 
