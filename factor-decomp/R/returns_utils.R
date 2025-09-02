@@ -3,6 +3,7 @@ suppressPackageStartupMessages({
   library(readr)
   library(dplyr)
   library(lubridate)
+  source("R/paths.R")
 })
 
 # prices_to_returns:
