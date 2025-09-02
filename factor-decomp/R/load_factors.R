@@ -37,7 +37,3 @@ load_ff_factors_daily <- function(raw_dir = data_raw_dir()) {
   return(factors)
 }
 
-
-
-load_ff_factors_daily()
-
