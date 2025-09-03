@@ -8,6 +8,7 @@ source("R/returns_utils.R")  # defines prices_to_returns(), align_with_factors()
 source("R/estimate_betas.R") # defines estimate_rolling_betas
 source("R/covariances.R")
 source("R/risk_decomp.R")
+source("R/report_plots.R")
 
 # 2) Define investment universe
 tickers <- c("SPY", # S&P 500, broad U.S. market
@@ -75,3 +76,12 @@ annualized <- decomp_latest %>%
   mutate(pct_of_sd = sd / sd[factor == "TOTAL"])
 
 annualized
+
+##### Plots #####
+plot_factor_share(decomp_ts)
+latest_tbl <- export_latest_table(decomp_ts)
+plot_vol_contrib_latest(decomp_ts)
+plot_vol_contrib_pie(decomp_ts)
+
+
+
