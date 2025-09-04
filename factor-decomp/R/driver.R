@@ -9,6 +9,7 @@ source("R/estimate_betas.R") # defines estimate_rolling_betas
 source("R/covariances.R")
 source("R/risk_decomp.R")
 source("R/report_plots.R")
+source("R/efficient_portfolio.R")
 
 # 2) Define investment universe
 tickers <- c("SPY", # S&P 500, broad U.S. market
@@ -48,9 +49,10 @@ dplyr::glimpse(est$resid_var)
 
 # 5) Define weights
 # start with equal weight portfolio
-w <- c(SPY = 0.1111, IWM = 0.1111, EFA = 0.1111, 
-       EEM = 0.1111, LQD = 0.1111, HYG = 0.1111, 
-       TLT = 0.1111, DBC = 0.1111, VNQ = 0.1111)
+
+equal_w <-
+  setNames(rep(1 / length(tickers), length(tickers)), tickers)
+
 
 # Run the decomposition time series (uses same 252d / 180obs windows by default)
 betas_csv <- file.path(data_clean_dir(), "rolling_betas.csv")
@@ -60,7 +62,7 @@ decomp_ts <- portfolio_risk_timeseries(
   betas_csv = betas_csv,
   resid_csv = resid_csv,
   factors_df = factors,
-  weights = w,
+  weights = equal_w,
   window = 252,
   min_obs = 180
 )
@@ -82,6 +84,60 @@ plot_factor_share(decomp_ts)
 latest_tbl <- export_latest_table(decomp_ts)
 plot_vol_contrib_latest(decomp_ts)
 plot_vol_contrib_pie(decomp_ts)
+
+
+##### OPTIMAL PORTFOLIO #####
+best <- find_max_sharpe_random(
+  tickers         = tickers,
+  window_days     = 252,
+  n_port          = 50000,
+  w_max           = 0.35,
+  rf_from_factors = dplyr::select(factors, date, rf),
+  seed            = 42
+)
+best$weights
+
+opt_w <- setNames(best$weights$weight, best$weights$ticker)
+
+decomp_ts <- portfolio_risk_timeseries(
+  betas_csv  = file.path(data_clean_dir(), "rolling_betas.csv"),
+  resid_csv  = file.path(data_clean_dir(), "rolling_resid_var.csv"),
+  factors_df = factors,
+  weights    = w,
+  window     = 252,
+  min_obs    = 180
+)
+
+# Step 4: plots
+plot_factor_share(decomp_ts)
+plot_variance_share_pie(decomp_ts)
+plot_vol_contrib_latest(decomp_ts)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
