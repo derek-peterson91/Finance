@@ -103,21 +103,90 @@ decomp_ts <- portfolio_risk_timeseries(
   betas_csv  = file.path(data_clean_dir(), "rolling_betas.csv"),
   resid_csv  = file.path(data_clean_dir(), "rolling_resid_var.csv"),
   factors_df = factors,
-  weights    = w,
+  weights    = opt_w,
   window     = 252,
   min_obs    = 180
 )
 
-# Step 4: plots
+# plots
 plot_factor_share(decomp_ts)
-plot_variance_share_pie(decomp_ts)
 plot_vol_contrib_latest(decomp_ts)
+plot_vol_contrib_pie(decomp_ts)
 
+################## COMPARISON################## 
+factors <- load_ff_factors_daily()
 
+decomp_ew <- portfolio_risk_timeseries(
+  betas_csv  = file.path(data_clean_dir(), "rolling_betas.csv"),
+  resid_csv  = file.path(data_clean_dir(), "rolling_resid_var.csv"),
+  factors_df = factors,
+  weights    = equal_w,
+  window     = 252,
+  min_obs    = 180
+)
 
+decomp_ow <- portfolio_risk_timeseries(
+  betas_csv  = file.path(data_clean_dir(), "rolling_betas.csv"),
+  resid_csv  = file.path(data_clean_dir(), "rolling_resid_var.csv"),
+  factors_df = factors,
+  weights    = opt_w,
+  window     = 252,
+  min_obs    = 180
+)
 
+betas_csv <- file.path(data_clean_dir(), "rolling_betas.csv")
 
+# factors in order
+fac_cols <- c("mkt_rf","smb","hml","rmw","cma","mom")
 
+# 1) Load rolling betas by TICKER, then pick a common latest date
+betas <- read_csv(betas_csv, show_col_types = FALSE) %>%
+  select(ticker, date, all_of(fac_cols)) %>%
+  arrange(date)
+
+# choose the latest date where ALL your tickers have betas
+tickers <- names(equal_w)  # or define same vector you used earlier
+latest_common <- betas %>% filter(ticker %in% tickers) %>%
+  count(date) %>% filter(n == length(tickers)) %>%
+  summarise(d = max(date)) %>% pull(d)
+
+B <- betas %>% filter(date == latest_common, ticker %in% tickers) %>%
+  arrange(match(ticker, tickers)) %>%
+  select(all_of(fac_cols)) %>% as.matrix()
+rownames(B) <- tickers
+
+# 2) Build weight vectors (named, same order as B’s rows)
+w_ew <- rep(1/length(tickers), length(tickers)); names(w_ew) <- tickers
+w_ow <- opt_w[tickers]  # from best$weights; ensure exact same ticker order
+
+# 3) Portfolio betas = weighted average exposures: b_p = w' * B
+beta_ew <- as.numeric(t(w_ew) %*% B); names(beta_ew) <- fac_cols
+beta_ow <- as.numeric(t(w_ow) %*% B); names(beta_ow) <- fac_cols
+
+# 4) Tidy comparison table
+beta_compare <- bind_rows(
+  tibble(portfolio = "Equal Weight",    factor = fac_cols, beta = beta_ew),
+  tibble(portfolio = "Optimal Weight",  factor = fac_cols, beta = beta_ow)
+) %>% tidyr::pivot_wider(names_from = portfolio, values_from = beta)
+
+beta_compare
+
+latest_date <- min(max(decomp_ew$date), max(decomp_ow$date))  # align dates
+
+varshare_compare <- bind_rows(
+  decomp_ew %>% filter(date == latest_date, factor != "TOTAL") %>%
+    mutate(portfolio = "Equal Weight"),
+  decomp_ow %>% filter(date == latest_date, factor != "TOTAL") %>%
+    mutate(portfolio = "Optimal Weight")
+) %>%
+  # clamp & renormalize to avoid negatives/ >100% from estimation noise
+  group_by(portfolio, date) %>%
+  mutate(share = pmax(share, 0), share = share / sum(share)) %>%
+  ungroup() %>%
+  select(portfolio, factor, share) %>%
+  tidyr::pivot_wider(names_from = portfolio, values_from = share)
+
+varshare_compare
 
 
 
