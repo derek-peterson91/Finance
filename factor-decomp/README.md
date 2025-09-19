@@ -7,7 +7,7 @@ End-to-end workflow in R for rolling factor betas, portfolio risk decomposition,
 - data_raw/: raw downloads (factors, prices)
 - data_clean/: merged/processed files
 - reports/: knitted Rmd/HTML outputs
-- app/: optional Shiny dashboard
+- app/: Shiny dashboard (to-do)
 
 ## Reproducibility
 Uses renv. To restore:
