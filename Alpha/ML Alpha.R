@@ -96,4 +96,5 @@ make_target <- function(pr, h = 21L) {
 }
 
 prices_t <- make_target(prices, h)
-
+head(prices_t)
+View(prices_t)
