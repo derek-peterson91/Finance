@@ -1,0 +1,69 @@
+---
+title: "Equal vs Optimal Portfolio: Factor Risk Decomposition"
+author: "Derek Peterson, CFA"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE, fig.width=10, fig.height=6, dpi = 300)
+
+# IMPORTANT: use forward slashes on Windows
+knitr::opts_knit$set(root.dir = "C:/Users/depet/R/Finance/factor-decomp")
+
+# Now relative paths work:
+source(file.path("R","paths.R"))
+source(file.path("R","load_factors.R"))
+source(file.path("R","returns_utils.R"))
+source(file.path("R","estimate_betas.R"))
+source(file.path("R","covariances.R"))
+source(file.path("R","risk_decomp.R"))
+source(file.path("R","report_plots.R"))
+source(file.path("R","efficient_portfolio.R"))
+
+stopifnot(
+  file.exists(file.path("data_clean","rolling_betas.csv")),
+  file.exists(file.path("data_clean","rolling_resid_var.csv")),
+  file.exists(file.path("data_raw","ticker_prices.csv"))
+)
+
+tickers <- c("SPY","IWM","EFA","EEM","LQD","HYG","TLT","DBC","VNQ")
+
+# equal weights
+ew_weights <- setNames(rep(1/length(tickers), length(tickers)), tickers)
+
+# optimal weights (from your efficient portfolio run)
+best <- readr::read_csv(file.path(data_clean_dir(), "efficient_weights_random.csv"), show_col_types = FALSE)
+ow_weights <- setNames(rep(0, length(tickers)), tickers)
+ow_weights[best$ticker] <- best$weight
+
+factors <- load_ff_factors_daily()
+
+# load decompositions
+decomp_ew <- readRDS(file.path(reports_dir(), "decomp_ew.rds"))
+decomp_ow <- readRDS(file.path(reports_dir(), "decomp_ow.rds"))
+latest_date <- min(max(decomp_ew$date), max(decomp_ow$date))
+
+# helper: clean shares
+clean_shares <- function(df) {
+  df %>%
+    group_by(date) %>%
+    mutate(share = pmax(share, 0),
+           share = share / sum(share, na.rm = TRUE)) %>%
+    ungroup()
+}
+```
+Equal-Weight Portfolio Variance Shares
+
+```{r ew_variance_share, include=TRUE}
+ew_var_share_plot <- plot_factor_share(decomp_ew)
+print(ew_var_share_plot)
+```
+
+Optimal Weight Portfolio Variance Shares
+
+```{r ow_variance_share, include=TRUE}
+ow_var_share_plot <- plot_factor_share(decomp_ow)
+print(ow_var_share_plot)
+```
+

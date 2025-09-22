@@ -13,10 +13,10 @@ tidy_coefs <- function(ct) {
   nm <- names(tb)
   names(tb) <- gsub("[ .]+", "_", tolower(nm))
   tb %>%
-    dplyr::select(term, estimate,
-                  std_error = dplyr::any_of(c("std_error","std_error_")),
+    select(term, estimate,
+                  std_error = any_of(c("std_error","std_error_")),
                   statistic,
-                  p_value   = dplyr::any_of(c("p_value","p_value_")))
+                  p_value   = any_of(c("p_value","p_value_")))
 }
 
 fit_one <- function(df) {
@@ -75,13 +75,13 @@ estimate_rolling_betas <- function(
       fitres <- fit_one(sl)
       
       betas_row <- fitres$betas %>%
-        dplyr::filter(term != "(Intercept)") %>%
-        dplyr::select(term, estimate) %>%
-        tidyr::pivot_wider(names_from = term, values_from = estimate) %>%
-        dplyr::mutate(date = sl$date[nrow(sl)],
+        filter(term != "(Intercept)") %>%
+        select(term, estimate) %>%
+        pivot_wider(names_from = term, values_from = estimate) %>%
+        mutate(date = sl$date[nrow(sl)],
                       r2   = fitres$r2,
                       ticker = tk) %>%
-        dplyr::select(ticker, date, r2, dplyr::everything())
+        select(ticker, date, r2, dplyr::everything())
       
       resv_row <- tibble::tibble(
         ticker = tk,
@@ -93,12 +93,12 @@ estimate_rolling_betas <- function(
       out_resv[[length(out_resv)+1]] <- resv_row
     }
     
-    if (length(out_beta)) betas_list[[length(betas_list)+1]] <- dplyr::bind_rows(out_beta)
-    if (length(out_resv)) resv_list[[length(resv_list)+1]]   <- dplyr::bind_rows(out_resv)
+    if (length(out_beta)) betas_list[[length(betas_list)+1]] <- bind_rows(out_beta)
+    if (length(out_resv)) resv_list[[length(resv_list)+1]]   <- bind_rows(out_resv)
   }
   
-  betas_all <- if (length(betas_list)) dplyr::bind_rows(betas_list) else dplyr::tibble()
-  resv_all  <- if (length(resv_list))  dplyr::bind_rows(resv_list)  else dplyr::tibble()
+  betas_all <- if (length(betas_list)) bind_rows(betas_list) else tibble()
+  resv_all  <- if (length(resv_list))  bind_rows(resv_list)  else tibble()
   
   readr::write_csv(betas_all, out_betas)
   readr::write_csv(resv_all,  out_resvars)
