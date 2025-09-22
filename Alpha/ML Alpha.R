@@ -83,6 +83,17 @@ funds %>%
   ungroup()
 
 
+h <- 21L
+prices <- prices %>%
+  arrange(id, date)
 
+make_target <- function(pr, h = 21L) {
+  setDT(pr); setkey(pr, id, date)
+  pr[, logp := log(adj_close)]
+  pr[, ret_fwd := shift(logp, -h) - logp, by = id]
+  pr[!is.finite(ret_fwd), ret_fwd := NA_real_]
+  pr[]
+}
 
+prices_t <- make_target(prices, h)
 
